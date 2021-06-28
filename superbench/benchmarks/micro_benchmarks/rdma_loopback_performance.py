@@ -73,20 +73,6 @@ class RDMALoopback(MicroBenchmarkWithInvoke):
             help='The index of numa node.',
         )
 
-    def __get_ib_devices(self):
-        """Get available ordered IB devices in the system and filter ethernet devices."""
-        # command = 'ls -l /sys/class/infiniband/* | awk \'{print $9}\' | sort | awk -F\'/\' \'{print $5}\''
-        command = "ibv_devinfo | awk '$1 ~ /hca_id/||/link_layer:/ {print $1,$2}' |  awk '{print $2}'"
-        output = subprocess.run(
-            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, check=False, universal_newlines=True
-        )
-        lines = output.stdout.splitlines()
-        ib_devices = []
-        for i in range(len(lines) - 1):
-            if 'InfiniBand' in lines[i + 1]:
-                ib_devices.append(lines[i])
-        return ib_devices
-
     def __get_numa_cores(self, numa_index):
         """Get the last two cores from different physical cpu core of NUMA<numa_index>.
 
@@ -150,18 +136,22 @@ class RDMALoopback(MicroBenchmarkWithInvoke):
                 )
                 return False
             else:
-                command = os.path.join(self._args.bin_dir, self._bin_name)
-                numa_cores = self.__get_numa_cores(self._args.numa)
-                server_core = int(numa_cores[-1])
-                client_core = int(numa_cores[-3])
-                command += ' ' + str(server_core) + ' ' + str(client_core)
-                command += ' ' + ib_command
-                command += command_mode + ' -F'
-                command += ' --iters=' + str(self._args.n)
-                command += ' -d ' + self.__get_ib_devices()[self._args.ib_index]
-                command += ' -p ' + str(network.get_free_port())
-                self._commands.append(command)
-
+                try:
+                    command = os.path.join(self._args.bin_dir, self._bin_name)
+                    numa_cores = self.__get_numa_cores(self._args.numa)
+                    server_core = int(numa_cores[-1])
+                    client_core = int(numa_cores[-3])
+                    command += ' ' + str(server_core) + ' ' + str(client_core)
+                    command += ' ' + ib_command
+                    command += command_mode + ' -F'
+                    command += ' --iters=' + str(self._args.n)
+                    command += ' -d ' + network.get_ib_devices()[self._args.ib_index]
+                    command += ' -p ' + str(network.get_free_port())
+                    self._commands.append(command)
+                except BaseException:
+                    self._result.set_return_code(ReturnCode.MICROBENCHMARK_DEVICE_GETTING_FAILURE)
+                    logger.error('Getting devices failure - benchmark: {}.'.format(self._name))
+                    return False
         return True
 
     def _process_raw_result(self, cmd_idx, raw_output):
@@ -177,9 +167,7 @@ class RDMALoopback(MicroBenchmarkWithInvoke):
             True if the raw output string is valid and result can be extracted.
         """
         ib_command = self._args.commands[cmd_idx]
-        self._result.add_raw_data(
-            'raw_output_' + str(self._args.ib_index) + '_' + ib_command + '_' + self._args.mode, raw_output
-        )
+        self._result.add_raw_data('raw_output_' + str(cmd_idx) + '_IB' + str(self._args.ib_index), raw_output)
 
         valid = False
         content = raw_output.splitlines()
