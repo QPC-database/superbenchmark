@@ -22,7 +22,6 @@ def get_free_port():
 
 def get_ib_devices():
     """Get available ordered IB devices in the system and filter ethernet devices."""
-    # command = 'ls -l /sys/class/infiniband/* | awk \'{print $9}\' | sort | awk -F\'/\' \'{print $5}\''
     command = "ibv_devinfo | awk '$1 ~ /hca_id/||/link_layer:/ {print $1,$2}' |  awk '{print $2}'"
     output = subprocess.run(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, check=False, universal_newlines=True
@@ -30,6 +29,6 @@ def get_ib_devices():
     lines = output.stdout.splitlines()
     ib_devices = []
     for i in range(len(lines) - 1):
-        if 'InfiniBand' in lines[i + 1]:
+        if 'InfiniBand' in lines[i + 1] and 'InfiniBand' not in lines[i]:
             ib_devices.append(lines[i])
     return ib_devices
