@@ -1,18 +1,17 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-"""Model benchmark example for RDMA loopback performance.
+"""Micro benchmark example for RDMA loopback performance.
 
 Commands to run:
-  python3 examples/benchmarks/rdma_loopback_performance_performance.py
+  python examples/benchmarks/rdma_loopback_performance_performance.py
 """
 
 from superbench.benchmarks import BenchmarkRegistry
 from superbench.common.utils import logger
 
 if __name__ == '__main__':
-    parameters = '--ib_index 0 --numa 1'
-    context = BenchmarkRegistry.create_benchmark_context('rdma-loopback', parameters=parameters)
+    context = BenchmarkRegistry.create_benchmark_context('rdma-loopback')
 
     benchmark = BenchmarkRegistry.launch_benchmark(context)
     if benchmark:

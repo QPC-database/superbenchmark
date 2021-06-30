@@ -35,7 +35,7 @@ class RDMALoopback(MicroBenchmarkWithInvoke):
             '--ib_index',
             type=int,
             default=0,
-            required=True,
+            required=False,
             help='The index of ib device.',
         )
         self._parser.add_argument(
@@ -69,7 +69,7 @@ class RDMALoopback(MicroBenchmarkWithInvoke):
             '--numa',
             type=int,
             default=0,
-            required=True,
+            required=False,
             help='The index of numa node.',
         )
 
@@ -88,6 +88,19 @@ class RDMALoopback(MicroBenchmarkWithInvoke):
         )
         return output.stdout.splitlines()[0].split(' ')
 
+    def __get_arguments_from_env(self):
+        """Read environment variables from runner used for parallel and fill in ib_index and numa_node_index.
+
+        Get 'PROC_RANK'(rank of current process) 'IB_DEVICES' 'NUMA_NODES' environment variables
+        Get ib_index and numa_node_index according to 'NUMA_NODES'['PROC_RANK'] and 'IB_DEVICES'['PROC_RANK']
+        """
+        if os.getenv('PROC_RANK'):
+            rank = int(os.getenv('PROC_RANK'))
+            if os.getenv('IB_DEVICES'):
+                self._args.ib_index = int(os.getenv('IB_DEVICES').split(',')[rank])
+            if os.getenv('NUMA_NODES'):
+                self._args.numa = int(os.getenv('NUMA_NODES').split(',')[rank])
+
     def _preprocess(self):
         """Preprocess/preparation operations before the benchmarking.
 
@@ -97,12 +110,15 @@ class RDMALoopback(MicroBenchmarkWithInvoke):
         if not super()._preprocess():
             return False
 
+        self.__get_arguments_from_env()
+
+        # Format the arguments
         if not isinstance(self._args.commands, list):
             self._args.commands = [self._args.commands]
         self._args.commands = [command.lower() for command in self._args.commands]
-
         self._args.mode = self._args.mode.upper()
 
+        # Check whether arguments are valid
         if str(self._args.size) not in self.__message_sizes:
             self._result.set_return_code(ReturnCode.INVALID_ARGUMENT)
             logger.error(
@@ -111,12 +127,11 @@ class RDMALoopback(MicroBenchmarkWithInvoke):
                 )
             )
             return False
-
         command_mode = ''
         if self._args.mode == 'AF':
             command_mode = ' -a'
         elif self._args.mode == 'S':
-            command_mode = ' -s ' + self._args.size
+            command_mode = ' -s ' + str(self._args.size)
         else:
             self._result.set_return_code(ReturnCode.INVALID_ARGUMENT)
             logger.error(
@@ -148,9 +163,9 @@ class RDMALoopback(MicroBenchmarkWithInvoke):
                     command += ' -d ' + network.get_ib_devices()[self._args.ib_index]
                     command += ' -p ' + str(network.get_free_port())
                     self._commands.append(command)
-                except BaseException:
+                except BaseException as e:
                     self._result.set_return_code(ReturnCode.MICROBENCHMARK_DEVICE_GETTING_FAILURE)
-                    logger.error('Getting devices failure - benchmark: {}.'.format(self._name))
+                    logger.error('Getting devices failure - benchmark: {}, message: {}.'.format(self._name, str(e)))
                     return False
         return True
 
@@ -200,4 +215,4 @@ class RDMALoopback(MicroBenchmarkWithInvoke):
         return True
 
 
-BenchmarkRegistry.register_benchmark('rdma-loopback', RDMALoopback, parameters='--ib_index 0 --numa 1')
+BenchmarkRegistry.register_benchmark('rdma-loopback', RDMALoopback)
