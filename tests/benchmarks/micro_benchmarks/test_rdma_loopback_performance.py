@@ -14,14 +14,20 @@ from superbench.common.utils import network
 
 class RDMALoopbackTest(unittest.TestCase):
     """Tests for RDMALoopback benchmark."""
-    def create_fake_bin(self):
+    def setUp(self):
         """Method called to prepare the test fixture."""
-        # Create fake binary file just for testing.
-        os.environ['SB_MICRO_PATH'] = '/tmp/superbench/'
-        binary_path = os.path.join(os.getenv('SB_MICRO_PATH'), 'bin')
-        Path(binary_path).mkdir(parents=True, exist_ok=True)
-        self.__binary_file = Path(os.path.join(binary_path, 'run_perftest_loopback'))
-        self.__binary_file.touch(mode=0o755, exist_ok=True)
+        if (len(network.get_ib_devices()) < 1):
+            # Create fake binary file just for testing.
+            os.environ['SB_MICRO_PATH'] = '/tmp/superbench/'
+            binary_path = os.path.join(os.getenv('SB_MICRO_PATH'), 'bin')
+            Path(binary_path).mkdir(parents=True, exist_ok=True)
+            self.__binary_file = Path(os.path.join(binary_path, 'run_perftest_loopback'))
+            self.__binary_file.touch(mode=0o755, exist_ok=True)
+
+    def tearDown(self):
+        """Method called after the test method has been called and the result recorded."""
+        if (len(network.get_ib_devices()) < 1):
+            self.__binary_file.unlink()
 
     def test_rdma_loopback_performance(self):
         """Test rdma-loopback benchmark."""
@@ -142,7 +148,6 @@ remote address: LID 0xd06 QPN 0x092f PSN 0x3ff1bc RKey 0x080329 VAddr 0x007fc97f
         for mode in ['AF', 'S']:
             # Test without RDMA devices
             if (len(network.get_ib_devices()) < 1):
-                self.create_fake_bin()
                 # Check registry.
                 benchmark_name = 'rdma-loopback'
                 (benchmark_class, predefine_params
@@ -157,8 +162,6 @@ remote address: LID 0xd06 QPN 0x092f PSN 0x3ff1bc RKey 0x080329 VAddr 0x007fc97f
                 assert (benchmark.return_code is ReturnCode.MICROBENCHMARK_DEVICE_GETTING_FAILURE)
 
                 assert (benchmark._process_raw_result(0, raw_output[mode]))
-
-                self.__binary_file.unlink()
 
             # Test with RDMA devices
             else:
